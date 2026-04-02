@@ -1,0 +1,18 @@
+[project]
+name = "anna-bot"
+version = "0.1.0"
+description = "Discord Bot for club Q&A powered by Azure AI"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "discord-py>=2.3",
+    "google-genai>=1.69.0",
+    "python-dotenv>=1.2.2",
+    "requests>=2.33.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+]

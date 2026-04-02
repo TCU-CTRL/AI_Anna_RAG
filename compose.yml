@@ -1,0 +1,24 @@
+services:
+  dev:
+    build: .
+    env_file: .env
+    ports:
+      - "8787:8787"
+    command: npx wrangler dev --local --port 8787 --ip 0.0.0.0
+
+  register:
+    build: .
+    env_file: .env
+    command: npx tsx src/register.ts
+    profiles: [register]
+
+  deploy:
+    build: .
+    env_file: .env
+    command: npx wrangler deploy
+    profiles: [deploy]
+
+  typecheck:
+    build: .
+    command: npx tsc --noEmit
+    profiles: [test]

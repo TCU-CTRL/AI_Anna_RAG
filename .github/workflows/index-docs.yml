@@ -1,0 +1,32 @@
+name: Index Documents to Azure AI Search
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**/*.md'
+
+  workflow_dispatch:
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run indexer
+        env:
+          AZURE_SEARCH_ENDPOINT: ${{ secrets.AZURE_SEARCH_ENDPOINT }}
+          AZURE_SEARCH_API_KEY: ${{ secrets.AZURE_SEARCH_API_KEY }}
+          AZURE_SEARCH_INDEX_NAME: ${{ secrets.AZURE_SEARCH_INDEX_NAME }}
+          DOCS_DIR: docs
+        run: python scripts/indexer.py
