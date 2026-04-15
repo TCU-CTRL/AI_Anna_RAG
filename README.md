@@ -146,3 +146,51 @@ uv run pytest tests/ -v
 # 統合テスト（Azure 環境変数が必要）
 uv run pytest tests/test_integration.py -v
 ```
+
+## `/anna` コマンドの処理フロー
+
+ユーザーが Discord で `/anna <質問>` を実行したときの全体的な流れは以下の通りです。
+
+```
+ユーザー: /anna 今度の大会はいつ？
+        │
+        ▼
+  Discord サーバー
+        │  HTTP POST（署名付き）
+        ▼
+  Cloudflare Worker (src/index.ts)
+  ├─ Ed25519 署名検証
+  ├─ 質問パラメータの抽出
+  └─ DEFERRED レスポンスを即時返却（3 秒タイムアウト回避）
+        │  ctx.waitUntil() でバックグラウンド処理開始
+        ▼
+  handleAnnaCommand() (src/commands.ts)
+        │
+        ▼
+  ① Azure AI Search に検索クエリ送信 (src/services/search.ts)
+     ├─ REST API (api-version=2024-07-01)
+     ├─ queryType: simple / アナライザ: ja.lucene
+     └─ 上位 5 件のドキュメントを取得
+        │
+        ▼
+  ② Gemini API で回答生成 (src/services/ai.ts)
+     ├─ システムプロンプト: anna のキャラ設定 + 検索結果をコンテキスト注入
+     ├─ temperature: 0.3 / maxOutputTokens: 800
+     └─ レート制限時は複数モデルをフォールバック
+        （gemini-2.5-flash → flash-lite → pro → 2.0-flash → 2.0-flash-lite）
+        │
+        ▼
+  ③ Discord Webhook で元メッセージを更新 (PATCH messages/@original)
+     ├─ 回答本文（2000 文字上限でトランケート）
+     └─ 📚 参考: ドキュメントタイトル一覧
+        │
+        ▼
+  ユーザーに回答が表示される
+```
+
+### ポイント
+
+- **署名検証**: Discord からのリクエストは Ed25519 で検証され、不正なリクエストは 401 で拒否されます。
+- **Deferred Response パターン**: RAG + LLM の処理は 3 秒以上かかるため、まず「考え中…」の Deferred レスポンスを返し、バックグラウンドで処理完了後に Webhook で回答を差し替えます。
+- **RAG (Retrieval-Augmented Generation)**: Azure AI Search で部内資料を検索し、その結果のみを根拠に Gemini が回答を生成します。検索結果にない情報は「部内資料には見当たらなかったよ」と正直に返します。
+- **モデルフォールバック**: Gemini API のレート制限（429）時に自動的に別モデルへ切り替え、可用性を確保します。
